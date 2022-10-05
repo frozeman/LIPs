@@ -8,15 +8,15 @@ type: LSP
 created: 2019-09-01
 requires: ERC165
 ---
-
+ 
 
 ## Simple Summary
 <!--"If you can't explain it simply, you don't understand it well enough." Provide a simplified and layman-accessible explanation of the LIP.-->
-A entry function to allow a contract to be able to receive any arbitrary information.
+An entry function enabling a contract to receive arbitrary information.
 
 ## Abstract
 <!--A short (~200 word) description of the technical issue being addressed.-->
-Similar to a smart contracts fallback function, which allows a contract to be notified of a incoming transaction with value, the Universal Receiver allow for any contract to recevie information about any interaction.
+Similar to a smart contract's fallback function, which allows a contract to be notified of an incoming transaction with a value, the Universal Receiver allows for any contract to receive information about any interaction.
 This allows receiving contracts to react on incoming transfers or other interactions.
 
 
@@ -27,29 +27,32 @@ A good example are token transfers, where the token smart contract should inform
 
 By creating a universal function that many smart contracts implement, receiving of asset and information can be unified.
 
-In cases where smart contracts function as a profile or wallet over a long time, an upgradable receiver can allow for future assets to be received, without that the interface needs to be changed.
+In cases where smart contracts function as a profile or wallet over a long time, an upgradable receiver can allow for future assets to be received, without the need for the interface to be changed.
 
 ## Specification
 
-ERC 165 interface id: `0x6bb56a14`
+[ERC165] interface id: `0x6bb56a14`
 
-Every contract that complies to the Universal Receiver standard MUST implement:
+Every contract that complies with the Universal Receiver standard MUST implement:
 
 ### Methods
 
 #### universalReceiver
 
 ```solidity
-universalReceiver(bytes32 typeId, bytes data) external returns (bytes32)
+universalReceiver(bytes32 typeId, bytes memory data) public returns (bytes memory)
 ```
 
 Allows to be called by any external contract to inform the contract about any incoming transfers, interactions or simple information.
 
-- `bytes32 typeId` is the hash of a standard (according to ERC165?)
+_Parameters:_
 
-- `bytes data` is a byteArray of arbitrary data. Reciving contracts should take the `id` in consideration to properly decode the `data`. The function MUST revert if `id` is not accepted or unknown. 
+- `typeId` is the hash of a standard (according to ERC165?)
 
-Returns `bytes32`, which can be used to encode response values.
+- `data` is a byteArray of arbitrary data. Receiving contracts should take the `id` in consideration to properly decode the `data`. The function MUST revert if `id` is not accepted or unknown. 
+
+_Returns:_ `bytes`, which can be used to encode response values.
+
 **If the receiving should fail the function MUST revert.**
 
 
@@ -58,19 +61,47 @@ Returns `bytes32`, which can be used to encode response values.
 #### UniversalReceiver
 
 ```solidity
-event UniversalReceiver(address indexed from, bytes32 indexed typeId, bytes32 indexed returnedValue, bytes receivedData)
+event UniversalReceiver(address indexed from, bytes32 indexed typeId, bytes indexed returnedValue, bytes receivedData)
 ```
 
 This event MUST be emitted when the `universalReceiver` function is succesfully executed.
 
 
+## Specification of the UniversalReceiverDelegate
+
+### Optional
+
+ERC165 interface id: `0xc2d7bcc1`
+
+
+```solidity
+universalReceiverDelegate(address sender, bytes32 typeId, bytes memory data) public returns (bytes memory);
+```
+
+Allows to be called by any external contract when an address wants to delegate its universalReceiver functionality to another smart contract.
+
+_Parameters:_
+
+- `sender` is the address delegating his universalReceiver functionality.
+
+- `typeId` is the hash of a standard (according to ERC165?).
+
+- `data` is a byteArray of arbitrary data. Receiving contracts should take the `id` in consideration to properly decode the `data`. The function MUST revert if `id` is not accepted or unknown.
+
+_Returns:_ `bytes`, which can be used to encode response values.
+
+**If the receiving should fail the function MUST revert.**
+
+
 ## Rationale
 <!--The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.-->
-This is an abstraction of the ideas behind Ethereum ERC223 and ERC777, that contracts are called when they are receiving tokens. With this proposal, we can allow contracts to receive any information over a standardised interface.
-This can even be done in an upgradable way, where the receiving code can changed over time to support new standards and assets. 
+This is an abstraction of the ideas behind Ethereum [ERC223](https://github.com/ethereum/EIPs/issues/223) and [ERC777](https://eips.ethereum.org/EIPS/eip-777), that contracts are called when they are receiving tokens. With this proposal, we can allow contracts to receive any information over a standardised interface.
+This can even be done in an upgradable way, where the receiving code can be changed over time to support new standards and assets. 
 
 
 ## Implementation
+
+An implementation can be found in the [lukso-network/lsp-smart-contracts](https://github.com/lukso-network/lsp-smart-contracts/tree/develop/contracts/LSP1UniversalReceiver) repository.
 
 A solidity example of the described interface:
 
@@ -80,9 +111,9 @@ pragma solidity >=0.5.0 <0.7.0;
 
 // ERC 165 interface id: `0x6bb56a14`
 interface ILSP1 {
-    event UniversalReceiver(address indexed from, bytes32 indexed typeId, bytes32 indexed returnedValue, bytes receivedData);
+    event UniversalReceiver(address indexed from, bytes32 indexed typeId, bytes indexed returnedValue, bytes receivedData);
 
-    function universalReceiver(bytes32 typeId, bytes memory data) external returns (bytes32);
+    function universalReceiver(bytes32 typeId, bytes memory data) external returns (bytes memory);
 }
 ```
 
@@ -95,7 +126,7 @@ without changing its own code.
 // ERC 165 interface id: `0xc2d7bcc1`
 interface ILSP1Delegate  /* is ERC165 */ {
 
-    function universalReceiverDelegate(address sender, bytes32 typeId, bytes memory data) external returns (bytes32);
+    function universalReceiverDelegate(address sender, bytes32 typeId, bytes memory data) public returns (bytes memory);
 }
 
 ```
@@ -116,7 +147,7 @@ contract BasicUniversalReceiver is ERC165, ILSP1 {
         _registerInterface(_INTERFACE_ID_LSP1);
     }
 
-    function universalReceiver(bytes32 typeId, bytes memory data) external returns (bytes32) {
+    function universalReceiver(bytes32 typeId, bytes memory data) public returns (bytes memory) {
         emit UniversalReceiver(msg.sender, typeId, 0x0, data);
         return 0x0;
     }
@@ -145,7 +176,7 @@ contract ExternalUniversalReceiver is ERC165, ILSP1 {
         universalReceiverDelegate = _universalReceiverDelegate;
     }
 
-    function universalReceiver(bytes32 _typeId, bytes memory _data) external returns (bytes32 returnValue) {
+    function universalReceiver(bytes32 _typeId, bytes memory _data) public returns (bytes memory returnValue) {
 
         if (ERC165(universalReceiverDelegate).supportsInterface(_INTERFACE_ID_LSP1DELEGATE)) {
             returnValue = ILSP1Delegate(universalReceiverDelegate).universalReceiverDelegate(_msgSender(), _typeId, _data);
@@ -169,14 +200,14 @@ contract UniversalReceiverDelegate is ERC165, ILSP1Delegate {
         _registerInterface(_INTERFACE_ID_LSP1DELEGATE);
     }
 
-    function universalReceiverDelegate(address sender, bytes32 typeId, bytes memory data) external override returns (bytes32) {
+    function universalReceiverDelegate(address sender, bytes32 typeId, bytes memory data) public override returns (bytes memory) {
         require(typeId == _TOKENS_RECIPIENT_INTERFACE_HASH, 'UniversalReceiverDelegate: Type not supported');
 
         // lets store all incoming token address (this is simplistic, you want to use a enumerableSet)
         // An example implementation can be found at https://github.com/lukso-network/standards-scenarios/blob/master/contracts/UniversalReceiver/UniversalReceiverAddressStore.sol
         addressStore.push(sender);
 
-        return typeId;
+        return abi.encodePacked(typeId);
     }
 }
 ```
@@ -203,7 +234,7 @@ contract UniversalReceiverExample is BasicUniversalReceiver {
         }
     }
 
-    function universalReceiver(bytes32 typeId, bytes calldata data) external returns (bytes32) {
+    function universalReceiver(bytes32 typeId, bytes memory data) public returns (bytes memory) {
         if(typeId == TOKEN_RECEIVE){
             (address from, address to, uint256 amount) = toTokenData(data);
             emit TokenReceived(msg.sender, from, to, amount);
@@ -216,6 +247,28 @@ contract UniversalReceiverExample is BasicUniversalReceiver {
 }
 ```
 
+## Interface Cheat Sheet
+
+```solidity
+
+interface ILSP1  /* is ERC165 */ {
+
+    event UniversalReceiver(address indexed from, bytes32 indexed typeId, bytes indexed returnedValue, bytes receivedData);
+    
+    
+    function universalReceiver(bytes32 typeId, bytes memory data) external returns (bytes memory);
+    
+}
+    
+interface ILSP1Delegate  /* is ERC165 */ {
+    
+    function universalReceiverDelegate(address sender, bytes32 typeId, bytes memory data) external returns (bytes memory);
+
+}
+```
+
 ## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+[ERC165]: <https://eips.ethereum.org/EIPS/eip-165>
